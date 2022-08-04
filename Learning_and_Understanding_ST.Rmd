@@ -1,0 +1,500 @@
+---
+title: "Spatial Transcriptomic with Giotto and Seurat"
+author: "Agatha Nabilla L"
+date: "6/17/2022"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+  html_notebook:
+    toc: yes
+  pdf_document:
+    toc: yes
+urlcolor: blue
+---
+
+```{r setup, echo=FALSE, include=TRUE, message=FALSE, warning=FALSE, tidy=TRUE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+```{r, echo=FALSE, include=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+klippy::klippy(position = c('top', 'right'))
+library(klippy)
+```
+
+# Introduction
+This file is created to help on learning progress for analysing and processing data generated from Spatial Transcriptomics experiment using two different R packages; Seurat and Giotto. 
+
+
+## Task 1 - Downloading the data 
+The data used for this learning step is coming from an [adult mouse brain FFPE sample](https://www.10xgenomics.com/resources/datasets/adult-mouse-brain-ffpe-1-standard-1-3-0) and is also a learning data-set available in [10X Visium Spatial Transcriptomics](https://www.10xgenomics.com/resources/datasets?query=&page=1&configure%5Bfacets%5D%5B0%5D=chemistryVersionAndThroughput&configure%5Bfacets%5D%5B1%5D=pipeline.version&configure%5BhitsPerPage%5D=500&menu%5Bproducts.name%5D=Spatial%20Gene%20Expression).
+
+Downloading the data:
+1. open terminal 
+2. copy code to download the data on this [link](https://www.10xgenomics.com/resources/datasets/adult-mouse-brain-ffpe-1-standard-1-3-0). 
+3. run the code
+4. check the download folder once the downloading process is completed
+
+## Task 2 - Set a working directory
+A working directory can be set-up in the desirable folder on your laptop, or in a new directory under your the downloaded data before. 
+```{r setwd giotto, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+setwd("~/FFPE brain")
+```
+
+## Giotto
+Steps below are designed to analyse and process the data with Giotto. 
+
+## Task 3 - Load the libraries or install the package 
+```{r libraries giotto, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+library(Giotto)
+library(data.table)
+library(Matrix)
+library(reticulate)
+library(igraph)
+library(hdf5r)
+library(scran)
+library(quadprog)
+library(devtools)
+library(remotes)
+library(scatterpie)
+library(smfishHmrf)
+```
+below is the code to install the Giotto if it is not yet installed, please un-comment the code prior to run.
+```{r, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE, tidy=TRUE} 
+# the most-updated package from Giotto suite 
+#remotes::install_github("RubD/Giotto@suite") 
+
+# the current v1.1.1 
+#remotes::install_github("RubD/Giotto")
+
+# alternative if it throws you an error
+#remotes::install_github("RubD/Giotto@cless") 
+
+# also to install this smfishhmrf package
+#remotes::install_bitbucket(repo = 'qzhudfci/smfishhmrf-r', ref='master', force=TRUE)
+```
+
+## Task 4 - Install or Set-up a conda environment
+In order to run function from Giotto, a local giotto environment is needed. There are two ways to create this environment. 
+
+The first option is by running a function [installGiottoEnvironment()](https://rubd.github.io/Giotto_site/reference/installGiottoEnvironment.html) on your script. This option is the simplest and easiest way, but by the time this guideline is written, this way is oftenly causing an error on a device that uses M1 processor. Thus, this option is not highly recommended. 
+
+The second option is by creating and building a conda environment in your device. By the time this guidance is written, Giotto is not supported on R version for the M1 laptop, therefore for M1 user, it is better to install this [R version - Bird Hippie](https://cran.ma.imperial.ac.uk/bin/macosx/base/R-4.1.2.pkg) for the Intel 64-bit rather the Apple silicon arm64 as well as to set up conda environment for [Intel 64-bit](https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.pkg).
+
+1. Download and install the miniconda 
+2. Create a yaml file using a text editor (Atom or TextEdit) and save it as a yaml file (e.g. giotto_env.yml)
+3. Copy this text into the file:
+
+name: giotto_env
+channels:
+ — defaults
+dependencies:
+ — pip=3.4
+ — pandas
+ — networkx
+ - python-igraph
+ - leidenalg
+ - python-louvain
+ - python.app (!!only for OSX!!)
+ - scikit-learn
+prefix: /Users/your_username/miniconda3/envs/giotto_env
+
+
+or if you are using M1
+
+name: summer-research
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - arpack=3.7.0=hefb7bc6_2
+  - bzip2=1.0.8=h0d85af4_4
+  - ca-certificates=2022.5.18.1=h033912b_0
+  - glpk=4.65=h0f52abe_1004
+  - gmp=6.2.1=h2e338ed_0
+  - icu=70.1=h96cf925_0
+  - igraph=0.9.8=hacf96bb_0
+  - joblib=1.1.0=pyhd8ed1ab_0
+  - leidenalg=0.8.10=py39hfd1d529_0
+  - libblas=3.9.0=14_osx64_openblas
+  - libcblas=3.9.0=14_osx64_openblas
+  - libcxx=14.0.4=hc203e6f_0
+  - libffi=3.4.2=h0d85af4_5
+  - libgfortran=5.0.0=9_3_0_h6c81a4c_23
+  - libgfortran5=9.3.0=h6c81a4c_23
+  - libiconv=1.16=haf1e3a3_0
+  - liblapack=3.9.0=14_osx64_openblas
+  - libopenblas=0.3.20=openmp_hb3cd9ec_0
+  - libxml2=2.9.14=h08a9926_0
+  - libzlib=1.2.12=h6c3fc93_0
+  - llvm-openmp=14.0.4=ha654fa7_0
+  - metis=5.1.0=h2e338ed_1006
+  - mpfr=4.1.0=h0f52abe_1
+  - ncurses=6.3=h96cf925_1
+  - networkx=2.8.2=pyhd8ed1ab_0
+  - numpy=1.22.4=py39h677350a_0
+  - openssl=3.0.3=hfe4f2af_0
+  - pandas=1.4.2=py39hf72b562_2
+  - pip=22.1.1=pyhd8ed1ab_0
+  - python=3.9.13=hf8d34f4_0_cpython
+  - python-dateutil=2.8.2=pyhd8ed1ab_0
+  - python-igraph=0.9.10=py39h564f7bb_1
+  - python-louvain=0.15=pyhd8ed1ab_1
+  - python_abi=3.9=2_cp39
+  - pytz=2022.1=pyhd8ed1ab_0
+  - readline=8.1=h05e3726_0
+  - scikit-learn=1.1.1=py39hafe9688_0
+  - scipy=1.8.1=py39hfa1a3ab_0
+  - setuptools=62.3.2=py39h6e9494a_0
+  - six=1.16.0=pyh6c4a22f_0
+  - sqlite=3.38.5=hd9f0692_0
+  - suitesparse=5.10.1=h7aff33d_1
+  - tbb=2021.5.0=hbb4e6a2_1
+  - texttable=1.6.4=pyhd8ed1ab_0
+  - threadpoolctl=3.1.0=pyh8a188c0_0
+  - tk=8.6.12=h5dbffcc_0
+  - tzdata=2022a=h191b570_0
+  - wheel=0.37.1=pyhd8ed1ab_0
+  - xz=5.2.5=haf1e3a3_1
+  - zlib=1.2.12=h6c3fc93_0
+prefix: /Users/your_username/opt/miniconda3/envs/summer-research
+
+Don't forget to change the your_username to the name of your directory.
+
+4. create the conda environment based on the created yaml file by running this code on the terminal
+
+conda env create -f name_of_your_yaml_file.yml
+
+5. get and copy the link of your conda environment to be used on the code in your R script by running this code on the terminal 
+
+conda info --envs
+
+6. Finally set your environment for Giotto to run. My conda environment name is summer-research.
+```{r}
+use_condaenv("summer-research")
+#reticulate::use_python(required = T, python = "/Users/agathanabillalestari/opt/miniconda3/envs/summer-research/bin/python3")
+```
+
+## Task 5 - set a path for your data and save directory
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+save_directory = "~/summer_research_project/Giotto/save_dir"
+the_instructions = createGiottoInstructions(save_plot = TRUE, show_plot = TRUE, return_plot = FALSE, save_dir = save_directory, python_path ="/Users/agathanabillalestari/opt/miniconda3/envs/summer-research/bin/python3")
+```
+
+## Task 6 Loading and creating Giotto object 
+This step will access the h5 and csv data obtained from the 10X Visisum to create a Giotto object
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+
+giotto_object = createGiottoVisiumObject(visium_dir="~/FFPE brain/spatial", h5_visium_path= "~/FFPE brain/spatial/Visium_FFPE_Mouse_Brain_raw_feature_bc_matrix.h5", h5_tissue_positions_path="/Users/agathanabillalestari/FFPE brain/spatial/spatial/tissue_positions_list.csv", instructions = the_instructions,h5_image_png_path = "/Users/agathanabillalestari/FFPE brain/spatial/spatial/tissue_lowres_image.png")
+```
+Below code is used to see the created Giotto object
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+spatPlot2D(gobject=giotto_object, show_image = TRUE, point_alpha = 0.75, coord_fix_ratio = 1, cell_color = 'in_tissue', save_param = list(save_name = "spatplot2D", base_width =6, base_height = 6, save_format = "pdf"))
+```
+From the picture, it can be seen that the tissue area and the non-tissue area is differentiate with number 0 and 1. Therefore the next step is differentiating the tissue area and subset the data. 
+
+## Task 7 - Subset the area of image that is tissue
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+# see the data table
+pDataDT(giotto_object)
+# check the area that is marked as 1 and 0
+spatPlot(gobject = giotto_object, cell_color = 'in_tissue', point_size = 2, cell_color_code = c('0' = 'lightgrey', '1' = 'blue'), save_param = list(save_name = 'tryin_tissue'))
+# creating an object that is the data table of the giotto object
+metadata = pDataDT(giotto_object)
+# filtering and selecting the data that are marked as 1 on the data table
+in_tissue_barcodes = metadata[in_tissue == 1]$cell_ID
+# subsetting the giotto object based on the cell id from the previous filtered object
+giotto_object = subsetGiotto(giotto_object, cell_ids = in_tissue_barcodes)
+```
+Check if the image is spots are overlaid and the subset process is succeed. If the image is not adjusted, an adjustment can be done manually by using updateGiottoImage() function.
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+spatPlot2D(gobject = giotto_object,
+           show_image = TRUE,
+           point_alpha = 0.75,
+           save_plot = FALSE)
+```
+
+## Task 8 - Quality control the data : Filtering
+On the quality control, you will filter the data based on the information obtained from filter combinations.
+
+Show filter combinations:
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+filter_options = filterCombinations(giotto_object, expression_thresholds = c(1,2), gene_det_in_min_cells = c(2, 5, 10), min_det_genes_per_cell = c(100, 200, 500), save_param = list(save_name = "fig_combinations_filter", base_width=6, base_height = 6, save_format = "pdf"))
+```
+
+To visualise the options in a data table
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+filter_options$results
+```
+
+Since the combination 2, 2, 100 have the medium removal cells and genes, thus this filtering process is using combination of 2 for the expression threshold to consider a gene expressed as well as the minimum # of cells that need to express a feature. Also 100 for the minimum # of features that need to be detected in a cell. 
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+giotto_object_f = filterGiotto(gobject=giotto_object, expression_threshold = 2, gene_det_in_min_cells = 2, min_det_genes_per_cell = 100)
+```
+
+## Task 9 - Quality control the data : Check the distribution
+It is important to see the distribution of the filtered data. Code on below is used to check the distribution of genes and cells on the data. 
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+filterDistributions(giotto_object_f, detection = 'genes')
+```
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+filterDistributions(giotto_object_f, detection = 'cells')
+```
+
+
+## Task 10 - Quality control the data : Normalisation and adding statisctical information
+Normalize expression matrix
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+giotto_object_n = normalizeGiotto(giotto_object_f)
+```
+Add cell and gene statistics to Giotto object 
+``` {r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+giotto_object_n = addStatistics(gobject = giotto_object_n)
+```
+
+## Task 11 - Quality control the data : Observing for any batch effects by checking the mitochondria percentage on the data. 
+Calling all the mitochondria genes
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+mt_genes = grep("Mt", giotto_object_n@gene_ID, value= T)
+giotto_object_n = addGenesPerc(gobject = giotto_object_n, genes = mt_genes, vector_name = "mito")
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+# visualisation 
+spatPlot2D(gobject = giotto_object_n, 
+           show_image = TRUE, 
+           point_alpha = 1, 
+           cell_color = "mito", 
+           color_as_factor = F, coord_fix_ratio = 1)
+```
+
+``` {r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+spatPlot2D(gobject = giotto_object_n,
+           show_image = TRUE,
+           point_alpha = 1,
+           cell_color = 'perc_genes', color_as_factor = F,
+           coord_fix_ratio = 1)
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+giotto_object_n = adjustGiottoMatrix(gobject = giotto_object_n, covariate_columns = c("perc_genes", "mito"), update_slot = "custom")
+```
+
+## Task 12 - Clustering and cell-type identification 
+The downstream analysis is perfomed for the highly variable gene (HVF - highly variable feature/gene) selection. Therefore, prior to running the dimensionality reduction, the information of HFV is generated. 
+```{r}
+giotto_object_n = calculateHVG(gobject = giotto_object_n, expression_values = "normalized", method = "cov_groups", nr_expression_groups = 20, zscore_threshold = 1.5)
+```
+
+## Task 13 - Dimensionality reduction: PCA
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+giotto_object_n = runPCA(gobject=giotto_object_n, expression_values = "normalized", reduction="cells", genes_to_use = "hvg")
+```
+PCA plot
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+plotPCA_2D(giotto_object_n)
+```
+scree plot to see significant PCs 
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+screePlot(giotto_object_n, 
+          expression_values = "normalized", 
+          genes_to_use = "hvg", 
+          ncp = 20, ylim = c(0, 12.5))
+```
+
+## Task 14 - Dimensionality reduction: UMAP
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+giotto_object_n = runUMAP(gobject = giotto_object_n, dimensions_to_use = 1:10)
+
+plotUMAP(gobject = giotto_object_n, 
+         point_size = 2, 
+         title = "Uniform Manifold Approximation & Projection (UMAP)", axis_title = 12, 
+         axis_text = 10)
+```
+
+## Task 15 - Clusering
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+giotto_object_n = createNearestNetwork(gobject = giotto_object_n, dimensions_to_use = 1:10)
+```
+
+### Leiden clustering 
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+giotto_object_n = doLeidenCluster(gobject = giotto_object_n, name = "leiden_clus", python_path ="/Users/agathanabillalestari/opt/miniconda3/envs/summer-research/bin/python3")
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+plotUMAP(gobject = giotto_object_n, cell_color = "leiden_clus", point_size = 2)
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+# the following colors will be used for subsequent plots 
+my_colors <- c('#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854','#ffd92f','#e5c494','#b3b3b3', '#FF6C90', '#E76BF3', '#00A5FF', '#00C0B8', '#00BE6C', '#00be67')
+
+plotUMAP(giotto_object_n,
+         cell_color = 'leiden_clus',
+         cell_color_code = my_colors,
+         point_size = 2.5,
+         point_shape = "no_border",
+         axis_title = 12,
+         axis_text = 10,
+         save_param = list(save_name = 'fig12_plotUMAP', 
+                           base_width = 6, 
+                           base_height = 6, 
+                           save_format = 'pdf'))
+```
+
+## Task 16 - DE genes: scran
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+
+scran_markers_subclusters = findMarkers_one_vs_all(gobject = giotto_object_n, method = 'scran', expression_values = 'normalized', cluster_column = 'leiden_clus')
+```
+The top three differentially expressed genes
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+Sig_scran = scran_markers_subclusters[which(scran_markers_subclusters$ranking <= 100),]
+ST_top3genes <- scran_markers_subclusters[, head(.SD, 3), by = 'cluster']
+```
+The heat-map
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+plotMetaDataHeatmap(gobject = giotto_object_n, 
+                    selected_genes = ST_top3genes$genes,
+                    metadata_cols = c('leiden_clus'),
+                    save_param = list(save_name = 'fig13_plotMetaDataHeatmap', 
+                                      base_width = 6, 
+                                      base_height = 6, 
+                                      save_format = 'pdf'))
+```
+## Task 17 - DE genes: Gini
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+
+gini_markers_subclusters = findMarkers_one_vs_all(gobject = giotto_object_n, method = 'gini', expression_values = 'normalized', cluster_column = 'leiden_clus')
+```
+The top three differentially expressed genes
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+Sig_gini = gini_markers_subclusters[which(gini_markers_subclusters$ranking <= 100),]
+ST_top3genes_gini <- gini_markers_subclusters[, head(.SD, 3), by = 'cluster']
+```
+The heat-map
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+plotMetaDataHeatmap(gobject = giotto_object_n, 
+                    selected_genes = ST_top3genes_gini$genes,
+                    metadata_cols = c('leiden_clus'),
+                    save_param = list(save_name = 'fig15_plotMetaDataHeatmap_gini', 
+                                      base_width = 6, 
+                                      base_height = 6, 
+                                      save_format = 'pdf'))
+```
+
+## Task 18 - The spatial grid
+```{r, echo=TRUE, message=FALSE, warning=FALSE, tidy=TRUE}
+# Spatial Grid
+my_giotto_object_n = createSpatialGrid(gobject = giotto_object_n,
+                                      sdimx_stepsize = 500,
+                                      sdimy_stepsize = 500,
+                                      minimum_padding = 0)
+
+# Visualize spatial grid
+spatPlot(giotto_object_n, 
+         cell_color = 'leiden_clus', 
+         point_size = 3,
+         show_grid = T, 
+         grid_color = 'grey', 
+         spatial_grid_name = 'spatial_grid',
+         cell_color_code = my_colors,
+         coord_fix_ratio = 1,
+         save_param = list(save_name = 'fig16_spatPlot', 
+                           base_width = 6, 
+                           base_height = 6, 
+                           save_format = 'pdf'))
+```
+
+
+
+## Seurat
+Steps below are designed to analyse and process the data with Seurat.
+
+## Task 18 - Used Libraries 
+These are used libraries on this code:
+```{r libraries, echo=TRUE, message=FALSE, warning=FALSE}
+library(remotes)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(hdf5r)
+library(shiny)
+```
+
+## Task 19 - Load the data 
+The data are loaded with Load10X_Spatial() function to create the Seurat object 
+```{r data, echo=TRUE, message=FALSE, warning=FALSE}
+FFPE_brain= Load10X_Spatial("~/FFPE brain/spatial",
+  filename="Visium_FFPE_Mouse_Brain_raw_feature_bc_matrix.h5", assay = "Spatial", slice = "slice1", filter.matrix = TRUE, image = NULL)
+
+FFPE_brain[["percent.Mt"]] = PercentageFeatureSet(FFPE_brain, pattern = "Mt")
+```
+
+## Task 20 - Quality control the data
+The data quality checked and gene expression visualization:
+```{r quality control, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+plot1= VlnPlot(FFPE_brain, features="nCount_Spatial") + NoLegend()
+plot2= SpatialFeaturePlot(FFPE_brain, features = "nCount_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1, plot2)
+
+plot1f= VlnPlot(FFPE_brain, features="nFeature_Spatial") + NoLegend()
+plot2f= SpatialFeaturePlot(FFPE_brain, features = "nFeature_Spatial") + theme(legend.position = "right")
+wrap_plots(plot1f, plot2f)
+
+plot1m= VlnPlot(FFPE_brain, features="percent.Mt") + NoLegend()
+plot2m= SpatialFeaturePlot(FFPE_brain, features = "percent.Mt") + theme(legend.position = "right")
+wrap_plots(plot1m, plot2m)
+
+```
+The images generated from the analysis must be in png format, otherwise it will give an error messages. Quality check is also performed on the marker genes (Ttr for the choroid plexus and Hpca is for the hippocampus):
+```{r quality control marker genes, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+SpatialFeaturePlot(FFPE_brain, features = c("Hpca", "Ttr"))
+```
+
+```{r SCTtransform, echo=FALSE, include=FALSE, message=FALSE, warning=FALSE}
+FFPE_brain_sct = SCTransform(FFPE_brain, assay="Spatial", verbose=FALSE)
+```
+Improve the visualization quality by changing the parameter of the spot size and the transparency.
+```{r qc improving visualization, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+p1 = SpatialFeaturePlot(FFPE_brain_sct, features="Ttr", pt.size.factor = 2)
+p2 = SpatialFeaturePlot(FFPE_brain_sct, features="Ttr", alpha=c(0.1,2))
+p1+p2
+```
+
+## Task 21 - Dimensionality reduction, clustering, and visualization 
+```{r dimensionality, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+
+FFPE_brain_sct = RunPCA(FFPE_brain_sct, assay="SCT", verbose = FALSE)
+FFPE_brain_sct = FindNeighbors(FFPE_brain_sct, reduction="pca", dims=1:30)
+FFPE_brain_sct = FindClusters(FFPE_brain_sct, verbose=FALSE)
+FFPE_brain_sct = RunUMAP(FFPE_brain_sct, reduction="pca", dims=1:30)
+
+p1r = DimPlot(FFPE_brain_sct, reduction="umap", label=TRUE)
+p2r = SpatialDimPlot(FFPE_brain_sct, label = TRUE, label.size = 2)
+p1r + p2r
+```
+
+## Task 22 - Conserved markers and Spatially variable features
+```{r conserved markers, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+
+de_markers = FindMarkers(FFPE_brain_sct, ident.1 = 5, ident.2 = 6)
+SpatialFeaturePlot(object = FFPE_brain_sct, features = rownames(de_markers)[1:3], alpha = c(0.1, 1), ncol = 3)
+```
+
+```{r markers, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+FFPE_brain_sct = FindSpatiallyVariableFeatures(FFPE_brain_sct, assay="SCT", features=VariableFeatures(FFPE_brain_sct)[1:500],selection.method = "markvariogram")
+
+top.features = head(SpatiallyVariableFeatures(FFPE_brain_sct, selection.method = "markvariogram"), 6)
+
+SpatialFeaturePlot(FFPE_brain_sct, features=top.features, ncol=3, alpha=c(0.1,1))
+```
+
+## Task 23 - Interactive Plot 
+```{r interactive plot, echo=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+SpatialFeaturePlot(FFPE_brain_sct, features="Ttr", interactive = TRUE)
+```
+
+
